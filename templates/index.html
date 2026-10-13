@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover"/>
+  <title>Mini Serre — Dashboard Simple</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/static/manifest.json"/>
+  <meta name="theme-color" content="#0a1209"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png"/>
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Mini Serre"/>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <span class="logo-icon">🌿</span>
+      <div>
+        <span class="logo-title">Mini Serre</span>
+        <span class="logo-sub">Mode Manuel / Automatique</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="mode-toggle" id="modeToggle" onclick="toggleAutoMode()">
+        <div class="toggle-track"><div class="toggle-thumb" id="toggleThumb"></div></div>
+        <span class="mode-label" id="modeLabel">MANUEL</span>
+      </div>
+      <div class="status-pill" id="arduinoStatus">
+        <span class="status-dot"></span>
+        <span id="statusText">Connexion...</span>
+      </div>
+      <div class="live-time" id="liveTime">--:--:--</div>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- Capteurs -->
+  <section class="sensors-grid">
+    <div class="sensor-card card-soil">
+      <div class="card-label">Humidité du sol</div>
+      <div class="card-value" id="soil">---</div>
+      <div class="card-unit">/ 1023</div>
+      <div class="card-bar"><div class="bar-fill" id="soilBar" style="width:50%"></div></div>
+      <div class="card-range" id="soilRange">Seuils : -- / --</div>
+    </div>
+    <div class="sensor-card card-temp">
+      <div class="card-label">Température</div>
+      <div class="card-value" id="temperature">--.-</div>
+      <div class="card-unit">°C</div>
+      <div class="card-bar"><div class="bar-fill" id="tempBar" style="width:50%"></div></div>
+      <div class="card-range" id="tempRange">Seuils : -- / --</div>
+    </div>
+    <div class="sensor-card card-hum">
+      <div class="card-label">Humidité de l'air</div>
+      <div class="card-value" id="humidity">--.-</div>
+      <div class="card-unit">%</div>
+      <div class="card-bar"><div class="bar-fill" id="humBar" style="width:50%"></div></div>
+      <div class="card-range">0% — 100%</div>
+    </div>
+    <div class="sensor-card card-light">
+      <div class="card-label">Luminosité (LDR)</div>
+      <div class="card-value" id="light">---</div>
+      <div class="card-unit">/ 1023</div>
+      <div class="card-bar"><div class="bar-fill" id="lightBar" style="width:50%"></div></div>
+      <div class="card-range" id="lightRange">Seuil lampe : --</div>
+    </div>
+  </section>
+
+  <section class="controls-chart-grid">
+
+    <!-- Contrôles -->
+    <div class="controls-panel">
+      <h2 class="panel-title">Contrôles</h2>
+      <div class="auto-banner" id="autoBanner" style="display:none">
+        🤖 Mode automatique actif — les actionneurs sont gérés par les seuils
+      </div>
+
+      <div class="control-block">
+        <div class="control-header">
+          <span class="control-icon">💧</span>
+          <div><div class="control-name">Pompe d'irrigation</div><div class="control-desc">Arrosage via relais</div></div>
+          <div class="state-badge" id="pumpBadge">OFF</div>
+        </div>
+        <div class="control-buttons" id="pumpButtons">
+          <button class="btn btn-on" onclick="control('pump_on')">Activer</button>
+          <button class="btn btn-off" onclick="control('pump_off')">Désactiver</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="control-block">
+        <div class="control-header">
+          <span class="control-icon">🪟</span>
+          <div><div class="control-name">Couvercle</div><div class="control-desc">Servo moteur</div></div>
+          <div class="state-badge" id="coverBadge">FERMÉ</div>
+        </div>
+        <div class="control-buttons" id="coverButtons">
+          <button class="btn btn-on" onclick="control('cover_open')">Ouvrir</button>
+          <button class="btn btn-off" onclick="control('cover_close')">Fermer</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="control-block">
+        <div class="control-header">
+          <span class="control-icon">🌀</span>
+          <div><div class="control-name">Ventilateur</div><div class="control-desc">Refroidissement / aération</div></div>
+          <div class="state-badge" id="fanBadge">OFF</div>
+        </div>
+        <div class="control-buttons" id="fanButtons">
+          <button class="btn btn-on" onclick="control('fan_on')">Activer</button>
+          <button class="btn btn-off" onclick="control('fan_off')">Désactiver</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="control-block">
+        <div class="control-header">
+          <span class="control-icon">💡</span>
+          <div><div class="control-name">Lampe d'appoint</div><div class="control-desc">S'allume si luminosité élevée (LDR)</div></div>
+          <div class="state-badge" id="lampBadge">OFF</div>
+        </div>
+        <div class="control-buttons" id="lampButtons">
+          <button class="btn btn-on" onclick="control('lamp_on')">Allumer</button>
+          <button class="btn btn-off" onclick="control('lamp_off')">Éteindre</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+
+      <!-- Serre Visual -->
+      <div class="serre-visual">
+        <div class="serre-svg-wrap">
+          <svg viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg" class="serre-svg">
+            <rect x="10" y="100" width="180" height="50" rx="4" fill="#1a2e1a" stroke="#2d4a2d" stroke-width="1.5"/>
+            <rect x="20" y="60" width="160" height="42" fill="#152615" stroke="#2d4a2d" stroke-width="1.5"/>
+            <rect x="30" y="65" width="60" height="30" rx="2" fill="#0d3d2a" opacity="0.7"/>
+            <rect x="110" y="65" width="60" height="30" rx="2" fill="#0d3d2a" opacity="0.7"/>
+            <polygon points="100,10 185,60 15,60" fill="#1a2e1a" stroke="#2d4a2d" stroke-width="1.5"/>
+            <g id="coverAnim">
+              <polygon id="coverLeft" points="100,10 15,60 55,60" fill="#0f4f2f" stroke="#3a7a3a" stroke-width="1.5" opacity="0.9"/>
+              <polygon id="coverRight" points="100,10 185,60 145,60" fill="#0f4f2f" stroke="#3a7a3a" stroke-width="1.5" opacity="0.9"/>
+            </g>
+            <line x1="100" y1="150" x2="100" y2="110" stroke="#2d6a1a" stroke-width="2"/>
+            <ellipse cx="100" cy="108" rx="14" ry="10" fill="#2d6a1a"/>
+            <ellipse cx="88" cy="118" rx="10" ry="7" fill="#3a7a22" transform="rotate(-20,88,118)"/>
+            <ellipse cx="112" cy="118" rx="10" ry="7" fill="#3a7a22" transform="rotate(20,112,118)"/>
+            <g id="waterDrops" opacity="0">
+              <ellipse cx="70" cy="75" rx="2" ry="3" fill="#4fc3f7"/>
+              <ellipse cx="90" cy="80" rx="2" ry="3" fill="#4fc3f7"/>
+              <ellipse cx="110" cy="73" rx="2" ry="3" fill="#4fc3f7"/>
+              <ellipse cx="130" cy="78" rx="2" ry="3" fill="#4fc3f7"/>
+            </g>
+            <!-- Pales ventilateur -->
+            <g id="fanIcon" transform="translate(165,95)" opacity="0.4">
+              <circle r="9" fill="none" stroke="#90a4ae" stroke-width="1.5"/>
+              <g id="fanBlades">
+                <line x1="0" y1="0" x2="0" y2="-7" stroke="#90a4ae" stroke-width="2"/>
+                <line x1="0" y1="0" x2="6" y2="4" stroke="#90a4ae" stroke-width="2"/>
+                <line x1="0" y1="0" x2="-6" y2="4" stroke="#90a4ae" stroke-width="2"/>
+              </g>
+            </g>
+            <!-- Lampe -->
+            <g id="lampIcon" transform="translate(35,95)" opacity="0.4">
+              <circle r="7" fill="#fbbf24" stroke="#fbbf24" stroke-width="1"/>
+              <line x1="0" y1="9" x2="0" y2="14" stroke="#90a4ae" stroke-width="1.5"/>
+            </g>
+          </svg>
+        </div>
+        <div class="serre-legend">
+          <span class="leg-item"><span class="leg-dot green"></span>Serre</span>
+          <span class="leg-item"><span class="leg-dot blue" id="legWater"></span>Eau</span>
+          <span class="leg-item"><span class="leg-dot yellow" id="legCover"></span>Couvercle</span>
+          <span class="leg-item"><span class="leg-dot grey" id="legFan"></span>Ventilateur</span>
+          <span class="leg-item"><span class="leg-dot grey" id="legLamp"></span>Lampe</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Graphiques + Seuils -->
+    <div class="right-col">
+      <div class="charts-panel">
+        <div class="chart-tabs">
+          <button class="tab active" onclick="switchTab('soil',this)">Sol</button>
+          <button class="tab" onclick="switchTab('temp',this)">Température</button>
+          <button class="tab" onclick="switchTab('hum',this)">Humidité air</button>
+          <button class="tab" onclick="switchTab('light',this)">Luminosité</button>
+        </div>
+        <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
+        <div class="chart-stats">
+          <div class="stat-item"><div class="stat-label">Minimum</div><div class="stat-val" id="statMin">--</div></div>
+          <div class="stat-item"><div class="stat-label">Maximum</div><div class="stat-val" id="statMax">--</div></div>
+          <div class="stat-item"><div class="stat-label">Moyenne</div><div class="stat-val" id="statAvg">--</div></div>
+          <div class="stat-item"><div class="stat-label">Dernière lecture</div><div class="stat-val mono" id="statLast">--:--:--</div></div>
+        </div>
+      </div>
+
+      <div class="thresholds-panel">
+        <h2 class="panel-title">⚙️ Seuils automatiques (calibrables pour ta plante)</h2>
+        <div class="thresh-grid">
+          <div class="thresh-item">
+            <label>💧 Irriguer si sol &lt;</label>
+            <div class="thresh-input-row">
+              <input type="range" min="0" max="1023" step="10" id="soilMin" oninput="updateThreshLabel('soilMin','soilMinVal')"/>
+              <span class="thresh-val" id="soilMinVal">400</span>
+            </div>
+          </div>
+          <div class="thresh-item">
+            <label>💧 Arrêter si sol &gt;</label>
+            <div class="thresh-input-row">
+              <input type="range" min="0" max="1023" step="10" id="soilMax" oninput="updateThreshLabel('soilMax','soilMaxVal')"/>
+              <span class="thresh-val" id="soilMaxVal">700</span>
+            </div>
+          </div>
+          <div class="thresh-item">
+            <label>🪟🌀 Ouvrir/ventiler si température &gt;</label>
+            <div class="thresh-input-row">
+              <input type="range" min="15" max="45" step="0.5" id="tempMax" oninput="updateThreshLabel('tempMax','tempMaxVal','°C')"/>
+              <span class="thresh-val" id="tempMaxVal">30°C</span>
+            </div>
+          </div>
+          <div class="thresh-item">
+            <label>🪟 Fermer si température &lt;</label>
+            <div class="thresh-input-row">
+              <input type="range" min="5" max="25" step="0.5" id="tempMin" oninput="updateThreshLabel('tempMin','tempMinVal','°C')"/>
+              <span class="thresh-val" id="tempMinVal">15°C</span>
+            </div>
+          </div>
+          <div class="thresh-item">
+            <label>💡 Allumer la lampe si luminosité &gt;</label>
+            <div class="thresh-input-row">
+              <input type="range" min="0" max="1023" step="10" id="lightMin" oninput="updateThreshLabel('lightMin','lightMinVal')"/>
+              <span class="thresh-val" id="lightMinVal">600</span>
+            </div>
+          </div>
+          <div class="thresh-apply">
+            <button class="btn-apply" onclick="applyThresholds()">Appliquer les seuils</button>
+          </div>
+        </div>
+        <p class="calib-note">💡 Astuce calibration sol : plonge le capteur dans l'eau (note la valeur ~ très basse ou très haute), puis à l'air libre (sol sec). Ajuste les seuils entre ces deux valeurs.<br>
+        💡 Astuce calibration LDR : couvre puis éclaire le capteur avec une lampe, note les deux valeurs extrêmes, et choisis ton seuil entre les deux.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Log -->
+  <section class="log-section">
+    <div class="log-header">
+      <h2 class="panel-title">Journal d'activité</h2>
+    </div>
+    <div class="log-list" id="logList">
+      <div class="log-entry info"><span class="log-time">--:--:--</span><span class="log-msg">Démarrage du système...</span></div>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<!-- Bannière d'installation de l'app -->
+<div class="install-banner" id="installBanner">
+  <span class="install-icon">🌿</span>
+  <div class="install-text">
+    <div class="install-title">Installer Mini Serre</div>
+    <div class="install-sub">Accès rapide depuis l'écran d'accueil</div>
+  </div>
+  <button class="install-btn" id="installBtn">Installer</button>
+  <button class="install-close" id="installClose">✕</button>
+</div>
+
+<script src="/static/js/dashboard.js"></script>
+<script src="/static/js/pwa.js"></script>
+</body>
+</html>
